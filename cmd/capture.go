@@ -40,7 +40,7 @@ func newCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
                 log.Fatalf("Error creating Kubernetes client: %v", err)
             }
 
-            // Initialize Kubernetes API service
+            // Initialize K8s API service
             kubeService := kube.NewKubernetesApiService(clientset, config, "default") // Replace "default" with target namespace
 
             var podsToCapture []string
