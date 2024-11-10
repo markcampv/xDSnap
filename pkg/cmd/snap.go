@@ -70,12 +70,14 @@ func fetchEnvoyEndpoint(kubeService kube.KubernetesApiService, pod, container, e
     command := []string{"curl", "-s", fmt.Sprintf("localhost:19000%s", endpoint)}
     var outputBuffer bytes.Buffer
 
-    const maxRetries = 3
-    const retryDelay = 1 * time.Second
+    const maxRetries = 5  // Increased retry count for interval use
+    const retryDelay = 3 * time.Second  // Delay for retries
     var err error
 
     for i := 0; i < maxRetries; i++ {
         outputBuffer.Reset()
+        log.Printf("Fetching data from %s on pod %s, attempt %d", endpoint, pod, i+1)
+        
         if _, err = kubeService.ExecuteCommand(pod, container, command, &outputBuffer); err != nil {
             time.Sleep(retryDelay)
             continue
