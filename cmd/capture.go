@@ -80,7 +80,6 @@ func newCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
                     Endpoints:     endpoints,
                     OutputDir:     outputDir,
                 }
-
                 if err := cmd.CaptureSnapshot(kubeService, snapshotConfig); err != nil {
                     log.Printf("Error capturing snapshot for pod %s: %v", pod, err)
                 }
