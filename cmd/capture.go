@@ -1,3 +1,4 @@
+// cmd/capture.go
 package main
 
 import (
@@ -12,10 +13,11 @@ import (
     "k8s.io/client-go/rest"
     metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
     "k8s.io/cli-runtime/pkg/genericclioptions"
+    "github.com/spf13/viper"
 )
 
 func newCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
-    var podName, containerName string
+    var podName, containerName, namespace string
     var endpoints []string
     var outputDir string
 
@@ -40,14 +42,19 @@ func newCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
                 log.Fatalf("Error creating Kubernetes client: %v", err)
             }
 
-            // Initialize K8s API service
-            kubeService := kube.NewKubernetesApiService(clientset, config, "default") // Replace "default" with target namespace
+            // If namespace is not specified, default to "default"
+            if namespace == "" {
+                namespace = "default"
+            }
+
+            // Initialize Kubernetes API service
+            kubeService := kube.NewKubernetesApiService(clientset, config, namespace)
 
             var podsToCapture []string
 
             if podName == "" {
                 // No specific pod provided, so fetch pods with the required annotation
-                pods, err := clientset.CoreV1().Pods("default").List(context.TODO(), metav1.ListOptions{}) // Replace "default" with target namespace
+                pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
                 if err != nil {
                     log.Fatalf("Error listing pods: %v", err)
                 }
@@ -87,7 +94,12 @@ func newCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
     captureCmd.Flags().StringVar(&containerName, "container", "", "Name of the container")
     captureCmd.Flags().StringSliceVar(&endpoints, "endpoints", []string{}, "Envoy endpoints to capture")
     captureCmd.Flags().StringVar(&outputDir, "output-dir", outputDir, "Directory to save snapshots")
+    captureCmd.Flags().StringVarP(&namespace, "namespace", "n", "", "Namespace to filter pods (optional)")
+    _ = viper.BindEnv("namespace", "KUBECTL_PLUGINS_CURRENT_NAMESPACE")
+    _ = viper.BindPFlag("namespace", captureCmd.Flags().Lookup("namespace"))
 
     return captureCmd
 }
+
+
 
