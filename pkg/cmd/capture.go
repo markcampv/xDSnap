@@ -3,7 +3,6 @@ package cmd
 import (
     "context"
     "log"
-    "time"
     "os"
     "path/filepath"
     "github.com/spf13/cobra"
