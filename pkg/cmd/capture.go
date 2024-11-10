@@ -4,10 +4,12 @@ import (
     "context"
     "log"
     "os"
+    "path/filepath"
     "github.com/spf13/cobra"
     "github.com/markcampv/xDSnap/kube"
     "k8s.io/client-go/kubernetes"
     "k8s.io/client-go/rest"
+    "k8s.io/client-go/tools/clientcmd"
     metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
     "k8s.io/cli-runtime/pkg/genericclioptions"
     "github.com/spf13/viper"
@@ -28,10 +30,19 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
         Use:   "capture",
         Short: "Capture Envoy snapshots from a Consul service mesh",
         Run: func(cmd *cobra.Command, args []string) {
-            // Initialize Kubernetes client and config
-            config, err := rest.InClusterConfig()
+            var config *rest.Config
+            var err error
+
+            // Try in-cluster config first
+            config, err = rest.InClusterConfig()
             if err != nil {
-                log.Fatalf("Error creating in-cluster config: %v", err)
+                log.Println("Could not use in-cluster config, falling back to kubeconfig:", err)
+                // Fallback to kubeconfig file
+                kubeconfigPath := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+                config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+                if err != nil {
+                    log.Fatalf("Failed to load kubeconfig: %v", err)
+                }
             }
 
             clientset, err := kubernetes.NewForConfig(config)
@@ -39,18 +50,15 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
                 log.Fatalf("Error creating Kubernetes client: %v", err)
             }
 
-            // If namespace is not specified, default to "default"
             if namespace == "" {
                 namespace = "default"
             }
 
-            // Initialize Kubernetes API service
             kubeService := kube.NewKubernetesApiService(clientset, config, namespace)
 
             var podsToCapture []string
 
             if podName == "" {
-                // No specific pod provided, so fetch pods with the required annotation
                 pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
                 if err != nil {
                     log.Fatalf("Error listing pods: %v", err)
@@ -67,11 +75,9 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
                     return
                 }
             } else {
-                // Specific pod was provided, so only capture data from that pod
                 podsToCapture = append(podsToCapture, podName)
             }
 
-            // Run CaptureSnapshot for each targeted pod
             for _, pod := range podsToCapture {
                 snapshotConfig := SnapshotConfig{
                     PodName:       pod,
