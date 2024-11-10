@@ -3,7 +3,7 @@ package main
 
 import (
 	"os"
-	"github.com/markcampv/xDSnap/cmd" // Import the capture command setup
+	"github.com/markcampv/xDSnap/cmd" 
 	"github.com/spf13/pflag"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
