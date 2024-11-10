@@ -2,10 +2,11 @@
 package main
 
 import (
-	"os"
-	"github.com/markcampv/xDSnap/cmd" 
+	"os" 
 	"github.com/spf13/pflag"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"github.com/markcampv/xDSnap/pkg/cmd"
+
 )
 
 func main() {

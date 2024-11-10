@@ -1,13 +1,11 @@
-// cmd/capture.go
 package main
 
 import (
     "context"
     "log"
     "os"
-
     "github.com/spf13/cobra"
-    "github.com/markcampv/xDSnap/pkg/cmd"
+	"github.com/markcampv/xDSnap/pkg/cmd"
     "github.com/markcampv/xDSnap/kube"
     "k8s.io/client-go/kubernetes"
     "k8s.io/client-go/rest"
