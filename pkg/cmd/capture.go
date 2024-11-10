@@ -3,6 +3,7 @@ package cmd
 import (
     "context"
     "log"
+    "time"
     "os"
     "path/filepath"
     "github.com/spf13/cobra"
@@ -57,6 +58,8 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
             kubeService := kube.NewKubernetesApiService(clientset, config, namespace)
 
             var podsToCapture []string
+             
+            log.Printf("Listing pods in namespace: %s", namespace)
 
             if podName == "" {
                 pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
@@ -64,7 +67,10 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
                     log.Fatalf("Error listing pods: %v", err)
                 }
 
+                log.Printf("Number of pods found: %d", len(pods.Items))
+
                 for _, pod := range pods.Items {
+                    log.Printf("Pod %s annotations: %v", pod.Name, pod.Annotations)
                     if pod.Annotations["consul.hashicorp.com/connect-inject"] == "true" {
                         podsToCapture = append(podsToCapture, pod.Name)
                     }
@@ -88,6 +94,7 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
                 if err := CaptureSnapshot(kubeService, snapshotConfig); err != nil {
                     log.Printf("Error capturing snapshot for pod %s: %v", pod, err)
                 }
+
             }
         },
     }

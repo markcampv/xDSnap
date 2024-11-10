@@ -1,6 +1,7 @@
 package cmd
 
 import (
+    "time"
     "archive/tar"
     "compress/gzip"
     "bytes"
@@ -40,6 +41,12 @@ func CaptureSnapshot(kubeService kube.KubernetesApiService, config SnapshotConfi
             continue
         }
 
+        // Check if data is empty, indicating potential issues with the endpoint
+        if len(data) == 0 {
+            log.Printf("Warning: No data received from endpoint %s for pod %s", endpoint, config.PodName)
+            continue
+        }
+
         filePath := filepath.Join(tempDir, fmt.Sprintf("%s.json", endpoint[1:]))
         if err := os.WriteFile(filePath, data, 0644); err != nil {
             log.Printf("Failed to write data for %s: %v", endpoint, err)
@@ -59,16 +66,35 @@ func CaptureSnapshot(kubeService kube.KubernetesApiService, config SnapshotConfi
     return nil
 }
 
-// fetchEnvoyEndpoint fetches data from a specific Envoy endpoint
 func fetchEnvoyEndpoint(kubeService kube.KubernetesApiService, pod, container, endpoint string) ([]byte, error) {
-    command := []string{"curl", fmt.Sprintf("localhost:19000%s", endpoint)}
+    command := []string{"curl", "-s", fmt.Sprintf("localhost:19000%s", endpoint)}
     var outputBuffer bytes.Buffer
 
-    if _, err := kubeService.ExecuteCommand(pod, container, command, &outputBuffer); err != nil {
-        return nil, err
+    const maxRetries = 3
+    const retryDelay = 1 * time.Second
+    var err error
+
+    for i := 0; i < maxRetries; i++ {
+        outputBuffer.Reset()
+        if _, err = kubeService.ExecuteCommand(pod, container, command, &outputBuffer); err != nil {
+            time.Sleep(retryDelay)
+            continue
+        }
+
+        outputBytes := outputBuffer.Bytes()
+        if len(outputBytes) > 0 {
+            return outputBytes, nil
+        }
+
+        time.Sleep(retryDelay)
     }
-    return outputBuffer.Bytes(), nil
+
+    return nil, fmt.Errorf("failed to fetch data from endpoint %s after %d retries", endpoint, maxRetries)
 }
+
+
+
+
 
 // createTarGz compresses a directory into a tar.gz file
 func createTarGz(outputFile string, sourceDir string) error {

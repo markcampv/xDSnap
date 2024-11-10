@@ -2,11 +2,14 @@ package kube
 
 import (
 
+    "bytes"
+    "fmt"
     "io"
+    "log"
+
     "k8s.io/client-go/kubernetes"
     "k8s.io/client-go/rest"
     "k8s.io/client-go/tools/remotecommand"
-    "log"
 )
 
 type KubernetesApiService interface {
@@ -15,7 +18,7 @@ type KubernetesApiService interface {
 
 type KubernetesApiServiceImpl struct {
     clientset  *kubernetes.Clientset
-    restConfig *rest.Config
+    restConfig *rest.Config 
     namespace  string
 }
 
@@ -29,40 +32,45 @@ func NewKubernetesApiService(clientset *kubernetes.Clientset, restConfig *rest.C
 }
 
 // ExecuteCommand executes a command in a specified pod/container and writes the output to an io.Writer
-func (k *KubernetesApiServiceImpl) ExecuteCommand(pod, container string, command []string, output io.Writer) (int, error) {
+func (k *KubernetesApiServiceImpl) ExecuteCommand(podName, containerName string, command []string, stdOut io.Writer) (int, error) {
+    log.Printf("Executing command in pod %s, container %s: %v", podName, containerName, command)
+
+    // Capture both stdout and stderr
+    var stdErr bytes.Buffer
     req := k.clientset.CoreV1().RESTClient().
         Post().
         Resource("pods").
-        Name(pod).
+        Name(podName).
         Namespace(k.namespace).
         SubResource("exec").
-        Param("container", container).
-        Param("stdin", "false").
+        Param("container", containerName).
         Param("stdout", "true").
         Param("stderr", "true").
         Param("tty", "false")
-
-    // Add the command parameters
-    for _, c := range command {
-        req.Param("command", c)
+    for _, arg := range command {
+        req.Param("command", arg)
     }
 
-    exec, err := remotecommand.NewSPDYExecutor(k.restConfig, "POST", req.URL())
+    executor, err := remotecommand.NewSPDYExecutor(k.restConfig, "POST", req.URL())
     if err != nil {
-        log.Printf("Error creating SPDY executor: %v", err)
-        return 1, err
+        return 0, fmt.Errorf("failed to create SPDY executor: %w", err)
     }
 
-    // Stream the output to the provided Writer
-    err = exec.Stream(remotecommand.StreamOptions{
-        Stdout: output,
-        Stderr: output,
+    err = executor.Stream(remotecommand.StreamOptions{
+        Stdout: stdOut,
+        Stderr: &stdErr,
+        Tty:    false,
     })
+
+    // Log output from stderr and stdout for diagnostics
+    if stdErr.Len() > 0 {
+        log.Printf("Stderr from pod %s, container %s: %s", podName, containerName, stdErr.String())
+    }
+
     if err != nil {
-        log.Printf("Error streaming command output: %v", err)
-        return 1, err
+        return 0, fmt.Errorf("command execution failed: %w", err)
     }
 
     return 0, nil
-	
 }
+
