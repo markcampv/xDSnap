@@ -20,7 +20,7 @@ xDSnap is a tool designed to capture Envoy configuration snapshots and perform n
 ## Features
 
 - **Capture Envoy Snapshots**: Periodically fetch data from Envoy admin endpoints.
-- **Optional TCPDump Injection**: Inject an ephemeral container to run `tcpdump` and capture network traffic.
+- (WIP)**Optional TCPDump Injection**: Inject an ephemeral container to run `tcpdump` and capture network traffic. 
 - **Data Archival**: Save collected data as `.tar.gz` files for easier storage and transfer.
 
 ---
