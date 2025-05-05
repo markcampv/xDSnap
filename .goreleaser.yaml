@@ -1,4 +1,4 @@
-project_name: kubectl-xdsnap
+project_name:  kubectl-xdsnap
 
 builds:
   - id: xdsnap
