@@ -14,13 +14,14 @@ builds:
     ignore:
       - goos: windows
         goarch: arm64
+    ldflags:
+      - -s -w
 
 archives:
   - format: tar.gz
     name_template: "xdsnap_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
-      - ./dist/{{ .ID }}/kubectl-xdsnap*  #  wildcard works for all OSes (.exe on Windows)
-
+      - "{{ .Binary }}*"  #  this works
 
 checksum:
   name_template: "checksums.txt"
@@ -28,4 +29,5 @@ checksum:
 release:
   github:
     owner: markcampv
-    name: xDSnap
+    name: xdsnap
+
