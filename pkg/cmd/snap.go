@@ -24,7 +24,7 @@ type SnapshotConfig struct {
 	Duration      time.Duration
 }
 
-var DefaultEndpoints = []string{"/stats", "/config_dump", "/listeners", "/clusters"}
+var DefaultEndpoints = []string{"/stats", "/config_dump", "/listeners", "/clusters", "/certs"}
 
 func CaptureSnapshot(kubeService kube.KubernetesApiService, config SnapshotConfig) error {
 	if len(config.Endpoints) == 0 {
