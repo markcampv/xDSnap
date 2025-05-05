@@ -19,7 +19,8 @@ archives:
   - format: tar.gz
     name_template: "xdsnap_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
-      - kubectl-xdsnap
+      - ./dist/{{ .ID }}/kubectl-xdsnap*  # ✅ wildcard works for all OSes (.exe on Windows)
+
 
 checksum:
   name_template: "checksums.txt"
