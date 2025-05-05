@@ -19,7 +19,7 @@ archives:
   - format: tar.gz
     name_template: "xdsnap_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
-      - ./dist/{{ .ID }}/kubectl-xdsnap*  # ✅ wildcard works for all OSes (.exe on Windows)
+      - ./dist/{{ .ID }}/kubectl-xdsnap*  #  wildcard works for all OSes (.exe on Windows)
 
 
 checksum:
