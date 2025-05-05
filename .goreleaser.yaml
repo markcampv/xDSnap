@@ -21,7 +21,7 @@ archives:
   - format: tar.gz
     name_template: "xdsnap_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
-      - "{{ .Binary }}*"  #  this works
+      - "{{ .Binary }}*"
 
 checksum:
   name_template: "checksums.txt"
