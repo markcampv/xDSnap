@@ -22,7 +22,7 @@ archives:
     name_template: "xdsnap_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - "{{ .Binary }}*"
-      - LICENSE
+      - LICENSE.txt
 
 checksum:
   name_template: "checksums.txt"
