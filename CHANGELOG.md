@@ -20,7 +20,19 @@ Generated manually. For contributions, please update this file when submitting P
 ### Fixed
 - Log level was not being reverted in edge cases — now restored post-capture.
 
-## [0.2.1] - 2025-05-05
+## [0.2.2] - 2025-05-05
+
+### Added
+- Logs are now fetched from both application and dataplane containers and stored in the snapshot directory.
+- Log collection runs in parallel with Envoy xDS data capture for efficiency.
+- Envoy log level is now automatically toggled to `debug` at the start of capture and reverted to `info` afterward.
+- Snapshot output now includes additional metadata for improved traceability.
+
+### Changed
+- The `--duration` flag is now used to control how long live logging should run.
+
+### Fixed
+- Fixed an issue where snapshot capture could hang due to missing context timeout — timeouts are now properly implemented.
 
 ### Added
 - Support for interval-based xDS snapshots (`--interval` flag).
