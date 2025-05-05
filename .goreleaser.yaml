@@ -1,0 +1,30 @@
+project_name: kubectl-xdsnap
+
+builds:
+  - id: xdsnap
+    main: ./cmd
+    binary: kubectl-xdsnap
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - format: tar.gz
+    name_template: "xdsnap_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - kubectl-xdsnap
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  github:
+    owner: markcampv
+    name: xDSnap
