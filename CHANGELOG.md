@@ -20,6 +20,12 @@ Generated manually. For contributions, please update this file when submitting P
 ### Fixed
 - Log level was not being reverted in edge cases — now restored post-capture.
 
+## [0.2.7] - 2025-05-06
+
+### Added.
+- Initial support for installing xDSnap via [Krew](https://krew.sigs.k8s.io), the kubectl plugin manager.
+
+
 ## [0.2.2] - 2025-05-05
 
 ### Added
@@ -27,6 +33,8 @@ Generated manually. For contributions, please update this file when submitting P
 - Log collection runs in parallel with Envoy xDS data capture for efficiency.
 - Envoy log level is now automatically toggled to `debug` at the start of capture and reverted to `info` afterward.
 - Snapshot output now includes additional metadata for improved traceability.
+- Captures output from the Envoy `/certs` endpoint for TLS insight.
+
 
 ### Changed
 - The `--duration` flag is now used to control how long live logging should run.
