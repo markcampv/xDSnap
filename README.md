@@ -11,7 +11,6 @@ xDSnap is a tool designed to capture Envoy configuration snapshots and perform n
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Usage](#usage)
-- [Commands](#commands)
 - [Example](#example)
 - [Configuration](#configuration)
 
@@ -35,22 +34,39 @@ xDSnap is a tool designed to capture Envoy configuration snapshots and perform n
 ---
 
 ## Installation
+### Using Krew (Recommended)
 
-1. **Clone the repository**:
+[Krew](https://krew.sigs.k8s.io/) is the plugin manager for kubectl. To install xDSnap via Krew:
+
+
+1. **Install Krew (if not already installed)**:
+
+```bash
+# On Linux or macOS
+(
+  set -x; cd "$(mktemp -d)" &&
+  OS="$(uname | tr '[:upper:]' '[:lower:]')" &&
+  ARCH="$(uname -m | sed -e 's/x86_64/amd64/' -e 's/arm.*$/arm/')" &&
+  KREW="krew-${OS}_${ARCH}" &&
+  curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz" &&
+  tar zxvf "${KREW}.tar.gz" &&
+  ./${KREW} install krew
+)
+
+# Add Krew to your PATH
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+```
+
+2. **Install xDSnap via Krew**:
     ```bash
-    git clone https://github.com/markcampv/xDSnap.git
-    cd xDSnap
+   kubectl krew install xdsnap
     ```
 
-2. **Build the project**:
+3. **Verify installation**:
     ```bash
-    go build -o xdsnap ./cmd
+   kubectl xdsnap --help
     ```
 
-3. **Verify the executable**:
-    ```bash
-    ./xdsnap --help
-    ```
 
 ---
 
@@ -60,7 +76,7 @@ The main command to use xDSnap is `capture`, which collects snapshots from speci
 
 ### Basic Command
 ```bash
-./xdsnap capture --namespace <namespace> --pod <pod-name> --container <container-name>
+kubectl xdsnap capture --namespace <namespace> --pod <pod-name> --container <container-name>
 ```
 
 ### Flags
@@ -71,14 +87,14 @@ The main command to use xDSnap is `capture`, which collects snapshots from speci
 - `--interval` : Interval between data captures (in seconds, default: 30).
 - `--duration` : Duration to run the capture process (in seconds, default: 60).
 - `--output-dir` : Directory to save the snapshots (default: current directory).
-- `--endpoints` : Specific Envoy admin endpoints to capture (default: `["/stats", "/config_dump", "/listeners", "/clusters"]`).
+- `--endpoints` : Specific Envoy admin endpoints to capture (default: `["/stats", "/config_dump", "/listeners", "/clusters", "/certs"]`).
 
 ### Example
 
 The following example captures data from the `static-client` container within the `static-client-685c8c98dd-r9wc5` pod in the `consul` namespace, every 30 seconds for a duration of 60 seconds:
 
 ```bash
-./xdsnap capture --namespace consul --pod static-client-685c8c98dd-r9wc5 --container static-client --interval 30 --duration 60
+kubectl xdsnap capture --namespace consul --pod static-client-685c8c98dd-r9wc5 --container static-client --interval 30 --duration 60
 ```
 
 
