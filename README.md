@@ -83,7 +83,8 @@ kubectl xdsnap capture --namespace <namespace> --pod <pod-name> --container <con
 
 - `--namespace`, `-n` : Namespace of the pod.
 - `--pod` : Name of the target pod (optional; if omitted, captures all Consul-injected pods).
-- `--container` : Name of the container running Envoy.
+- `--container` : Name of the application container.
+  Do **not** specify the `consul-dataplane` container—this will cause the tool to exit automatically, as exec'ing into the dataplane is not supported.
 - `--interval` : Interval between data captures (in seconds, default: 30).
 - `--duration` : Duration to run the capture process (in seconds, default: 60).
 - `--output-dir` : Directory to save the snapshots (default: current directory).

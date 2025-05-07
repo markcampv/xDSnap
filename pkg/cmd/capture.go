@@ -33,6 +33,9 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		Use:   "capture",
 		Short: "Capture Envoy snapshots from a Consul service mesh",
 		Run: func(cmd *cobra.Command, args []string) {
+			if containerName == "consul-dataplane" {
+				log.Fatal("Error: 'consul-dataplane' cannot be used as the --container value. Please specify the application container instead.")
+			}
 			config, err := rest.InClusterConfig()
 			if err != nil {
 				log.Printf("Could not use in-cluster config, falling back to kubeconfig: %v", err)
