@@ -3,7 +3,7 @@ xDSnap: A kubectl plugin to capture and organize Envoy configuration snapshots a
 
 # xDSnap
 
-xDSnap is a tool designed to capture Envoy configuration snapshots and perform network traffic analysis in a Consul service mesh. It allows users to capture endpoint information periodically from Envoy's admin endpoints on Kubernetes pods and save them as `.tar.gz` archives. 
+xDSnap is a tool designed to capture Envoy configuration snapshots and perform network traffic analysis in a Consul service mesh. It allows users to capture Envoy endpoint information and DEBUG logs periodically on Kubernetes pods and save them as `.tar.gz` archives. 
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ xDSnap is a tool designed to capture Envoy configuration snapshots and perform n
 
 ## Features
 
-- **Capture Envoy Snapshots**: Periodically fetch data from Envoy admin endpoints.
+- **Capture Envoy Snapshots**: Periodically fetch data from Envoy admin endpoints, dataplane logs, and application logs.
 - (WIP)**Optional TCPDump Injection**: Inject an ephemeral container to run `tcpdump` and capture network traffic. 
 - **Data Archival**: Save collected data as `.tar.gz` files for easier storage and transfer.
 
