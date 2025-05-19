@@ -13,6 +13,7 @@ xDSnap is a tool designed to capture Envoy configuration snapshots and perform n
 - [Usage](#usage)
 - [Example](#example)
 - [Configuration](#configuration)
+- [Feature Requests](#-feature-requests)
 
 ---
 
