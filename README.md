@@ -106,3 +106,35 @@ kubectl xdsnap capture --namespace consul --pod static-client-685c8c98dd-r9wc5 -
 
 #### Notes
 - The tool attempts to use in-cluster configuration. If unsuccessful, it falls back to using `KUBECONFIG`.
+
+## 💡 Feature Requests
+
+We welcome suggestions and ideas to improve xDSnap!
+
+### 🙋 How Do I Submit a New Feature Request?
+
+If you have an idea for a new feature, please [open a new issue](https://github.com/markcampv/xdsnap/issues/new?template=feature_request.md) using the **Feature Request** template. Make sure to provide the following:
+
+- **Brief Description**  
+  What is the feature you'd like to see added?
+
+- **Use Case / Motivation**  
+  How would you use this feature, and why is it important? What problem does it solve?
+
+- **Proposed Changes**  
+  Describe any anticipated changes to:
+    - Command-line interface (CLI)
+    - Output format or structure
+    - Integration with other tools or services
+
+- **Alternatives Considered**  
+  Are there any current workarounds or existing tools you’ve tried?
+
+- **Additional Context** *(Optional)*  
+  Screenshots, logs, or sample outputs that illustrate the need or behavior you're requesting.
+
+---
+
+Your input helps shape the direction of xDSnap. We review all submissions and will provide feedback or updates when action is taken.
+
+Thank you for contributing!
