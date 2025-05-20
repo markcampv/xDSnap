@@ -13,4 +13,7 @@ jobs:
 
       - uses: rajatjindal/krew-release-bot@v0.0.44
         with:
-          manifestFile: .krew.yaml
+          krew_template_file: .krew.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
