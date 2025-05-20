@@ -3,7 +3,7 @@ kind: Plugin
 metadata:
   name: xdsnap
 spec:
-  version: {{ .TagName }}
+  version: "{{ .TagName }}"
   homepage: "https://github.com/markcampv/xdsnap"
   shortDescription: Capture application data and Envoy xDS state from Consul sidecars
   description: |
@@ -12,63 +12,69 @@ spec:
     It's helpful for analyzing upstream issues, traffic configuration, and
     xDS debug state.
 
+  caveats: |
+    This plugin captures data using kubectl exec and may require:
+    - RBAC permissions to exec into pods
+    - Consul sidecars (consul-dataplane or envoy)
+    - tcpdump (optional, if enabled in capture)
+
   platforms:
-    - '{{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_linux_amd64.tar.gz" .TagName }}'
-      bin: kubectl-xdsnap
-      files:
-        - from: kubectl-xdsnap
-          to: .
-        - from: LICENSE
-          to: .
-      selector:
+    - selector:
         matchLabels:
           os: linux
           arch: amd64
-
-    - '{{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_linux_arm64.tar.gz" .TagName }}'
+      {{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_linux_amd64.tar.gz" .TagName }}
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
           to: .
         - from: LICENSE
           to: .
-      selector:
+
+    - selector:
         matchLabels:
           os: linux
           arch: arm64
-
-    - '{{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_darwin_amd64.tar.gz" .TagName }}'
+      {{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_linux_arm64.tar.gz" .TagName }}
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
           to: .
         - from: LICENSE
           to: .
-      selector:
+
+    - selector:
         matchLabels:
           os: darwin
           arch: amd64
-
-    - '{{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_darwin_arm64.tar.gz" .TagName }}'
+      {{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_darwin_amd64.tar.gz" .TagName }}
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
           to: .
         - from: LICENSE
           to: .
-      selector:
+
+    - selector:
         matchLabels:
           os: darwin
           arch: arm64
+      {{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_darwin_arm64.tar.gz" .TagName }}
+      bin: kubectl-xdsnap
+      files:
+        - from: kubectl-xdsnap
+          to: .
+        - from: LICENSE
+          to: .
 
-    - '{{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_windows_amd64.tar.gz" .TagName }}'
+    - selector:
+        matchLabels:
+          os: windows
+          arch: amd64
+      {{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_windows_amd64.tar.gz" .TagName }}
       bin: kubectl-xdsnap.exe
       files:
         - from: kubectl-xdsnap.exe
           to: .
         - from: LICENSE
           to: .
-      selector:
-        matchLabels:
-          os: windows
-          arch: amd64
