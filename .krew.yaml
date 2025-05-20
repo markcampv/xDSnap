@@ -17,7 +17,8 @@ spec:
         matchLabels:
           os: linux
           arch: amd64
-      {{ addURIAndSha (printf "https://github.com/markcampv/xdsnap/releases/download/%s/xdsnap_%s_linux_amd64.tar.gz" .TagName .Version) .TagName }}
+      {{ $version := replace .TagName "v" "" }}
+      {{ addURIAndSha (printf "https://github.com/markcampv/xdsnap/releases/download/%s/xdsnap_%s_linux_amd64.tar.gz" .TagName $version) .TagName }}
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
@@ -29,7 +30,8 @@ spec:
         matchLabels:
           os: linux
           arch: arm64
-      {{ addURIAndSha (printf "https://github.com/markcampv/xdsnap/releases/download/%s/xdsnap_%s_linux_arm64.tar.gz" .TagName .Version) .TagName }}
+      {{ $version := replace .TagName "v" "" }}
+      {{ addURIAndSha (printf "https://github.com/markcampv/xdsnap/releases/download/%s/xdsnap_%s_linux_arm64.tar.gz" .TagName $version) .TagName }}
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
@@ -41,7 +43,8 @@ spec:
         matchLabels:
           os: darwin
           arch: amd64
-      {{ addURIAndSha (printf "https://github.com/markcampv/xdsnap/releases/download/%s/xdsnap_%s_darwin_amd64.tar.gz" .TagName .Version) .TagName }}
+      {{ $version := replace .TagName "v" "" }}
+      {{ addURIAndSha (printf "https://github.com/markcampv/xdsnap/releases/download/%s/xdsnap_%s_darwin_amd64.tar.gz" .TagName $version) .TagName }}
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
@@ -53,7 +56,8 @@ spec:
         matchLabels:
           os: darwin
           arch: arm64
-      {{ addURIAndSha (printf "https://github.com/markcampv/xdsnap/releases/download/%s/xdsnap_%s_darwin_arm64.tar.gz" .TagName .Version) .TagName }}
+      {{ $version := replace .TagName "v" "" }}
+      {{ addURIAndSha (printf "https://github.com/markcampv/xdsnap/releases/download/%s/xdsnap_%s_darwin_arm64.tar.gz" .TagName $version) .TagName }}
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
@@ -65,7 +69,8 @@ spec:
         matchLabels:
           os: windows
           arch: amd64
-      {{ addURIAndSha (printf "https://github.com/markcampv/xdsnap/releases/download/%s/xdsnap_%s_windows_amd64.tar.gz" .TagName .Version) .TagName }}
+      {{ $version := replace .TagName "v" "" }}
+      {{ addURIAndSha (printf "https://github.com/markcampv/xdsnap/releases/download/%s/xdsnap_%s_windows_amd64.tar.gz" .TagName $version) .TagName }}
       bin: kubectl-xdsnap.exe
       files:
         - from: kubectl-xdsnap.exe
