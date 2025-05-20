@@ -5,7 +5,7 @@ metadata:
 spec:
   version: {{ .TagName }}
   homepage: https://github.com/markcampv/xdsnap
-  shortDescription: Capture Envoy xDS state from Consul sidecars
+  shortDescription: Capture application data and Envoy xDS state from Consul sidecars
   description: |
     xDSnap helps platform and service mesh operators extract debug-level
     configuration and endpoint state from Envoy sidecars connected to Consul.
