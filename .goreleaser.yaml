@@ -1,4 +1,4 @@
-project_name:  kubectl-xdsnap
+project_name: kubectl-xdsnap
 
 builds:
   - id: xdsnap
@@ -19,7 +19,7 @@ builds:
 
 archives:
   - format: tar.gz
-    name_template: "xdsnap_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "xdsnap_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
     files:
       - "{{ .Binary }}*"
       - LICENSE
@@ -31,4 +31,3 @@ release:
   github:
     owner: markcampv
     name: xdsnap
-
