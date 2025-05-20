@@ -5,25 +5,19 @@ metadata:
 spec:
   version: "{{ .TagName }}"
   homepage: "https://github.com/markcampv/xdsnap"
-  shortDescription: Capture application data and Envoy xDS state from Consul sidecars
+  shortDescription: "Capture Envoy xDS state from Consul sidecars"
   description: |
     xDSnap helps platform and service mesh operators extract debug-level
     configuration and endpoint state from Envoy sidecars connected to Consul.
     It's helpful for analyzing upstream issues, traffic configuration, and
     xDS debug state.
 
-  caveats: |
-    This plugin captures data using kubectl exec and may require:
-    - RBAC permissions to exec into pods
-    - Consul sidecars (consul-dataplane or envoy)
-    - tcpdump (optional, if enabled in capture)
-
   platforms:
     - selector:
         matchLabels:
           os: linux
           arch: amd64
-      {{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_linux_amd64.tar.gz" .TagName }}
+      {{addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_0.2.7_linux_amd64.tar.gz" .TagName | indent 6 }}
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
@@ -35,7 +29,7 @@ spec:
         matchLabels:
           os: linux
           arch: arm64
-      {{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_linux_arm64.tar.gz" .TagName }}
+      {{addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_0.2.7_linux_arm64.tar.gz" .TagName | indent 6 }}
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
@@ -47,7 +41,7 @@ spec:
         matchLabels:
           os: darwin
           arch: amd64
-      {{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_darwin_amd64.tar.gz" .TagName }}
+      {{addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_0.2.7_darwin_amd64.tar.gz" .TagName | indent 6 }}
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
@@ -59,7 +53,7 @@ spec:
         matchLabels:
           os: darwin
           arch: arm64
-      {{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_darwin_arm64.tar.gz" .TagName }}
+      {{addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_0.2.7_darwin_arm64.tar.gz" .TagName | indent 6 }}
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
@@ -71,7 +65,7 @@ spec:
         matchLabels:
           os: windows
           arch: amd64
-      {{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_windows_amd64.tar.gz" .TagName }}
+      {{addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_0.2.7_windows_amd64.tar.gz" .TagName | indent 6 }}
       bin: kubectl-xdsnap.exe
       files:
         - from: kubectl-xdsnap.exe
