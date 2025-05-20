@@ -13,7 +13,7 @@ spec:
     xDS debug state.
 
   platforms:
-    - "{{ addURIAndSha \"https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_linux_amd64.tar.gz\" .TagName }}"
+    - '{{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_linux_amd64.tar.gz\" .TagName }}'
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
@@ -25,7 +25,7 @@ spec:
           os: linux
           arch: amd64
 
-    - "{{ addURIAndSha \"https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_linux_arm64.tar.gz\" .TagName }}"
+    - '{{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_linux_arm64.tar.gz\" .TagName }}'
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
@@ -37,7 +37,7 @@ spec:
           os: linux
           arch: arm64
 
-    - "{{ addURIAndSha \"https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_darwin_amd64.tar.gz\" .TagName }}"
+    - '{{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_darwin_amd64.tar.gz\" .TagName }}'
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
@@ -49,7 +49,7 @@ spec:
           os: darwin
           arch: amd64
 
-    - "{{ addURIAndSha \"https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_darwin_arm64.tar.gz\" .TagName }}"
+    - '{{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_darwin_arm64.tar.gz\" .TagName }}'
       bin: kubectl-xdsnap
       files:
         - from: kubectl-xdsnap
@@ -61,7 +61,7 @@ spec:
           os: darwin
           arch: arm64
 
-    - "{{ addURIAndSha \"https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_windows_amd64.tar.gz\" .TagName }}"
+    - '{{ addURIAndSha "https://github.com/markcampv/xdsnap/releases/download/{{ .TagName }}/xdsnap_{{ .TagName }}_windows_amd64.tar.gz\" .TagName }}'
       bin: kubectl-xdsnap.exe
       files:
         - from: kubectl-xdsnap.exe
