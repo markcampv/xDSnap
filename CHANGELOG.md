@@ -20,6 +20,25 @@ Generated manually. For contributions, please update this file when submitting P
 ### Fixed
 - Log level was not being reverted in edge cases — now restored post-capture.
 
+## [0.2.8] - 2025-05-19
+
+### Added
+- New support for capturing tcpdump traffic from pods using ephemeral privileged debug containers (similar to `ksniff`).
+- `.pcap` files from tcpdump are now included in the snapshot tarball when `--tcpdump-enabled` is specified.
+- Support for running a single snapshot cycle (no interval loop) when tcpdump capture is active.
+- Automatic sidecar detection now determines whether to use `wget` or a debug pod for interacting with the Envoy admin API.
+- Application container can now be used for endpoint capture even if dataplane is used for log toggling.
+
+### Changed
+- Tcpdump capture and Envoy config fetch now run concurrently across targeted pods.
+- Logging behavior has been refined for clarity when combining application, dataplane, and tcpdump captures.
+- Ephemeral debug pod creation uses a consistent naming convention and ensures proper cleanup after capture.
+
+### Fixed
+- Resolved an issue where log level toggling would silently fail if `consul-dataplane` was not the target container.
+- Fixed bug where `--container` value defaulting logic failed when missing or misused in multi-container pods.
+
+
 ## [0.2.7] - 2025-05-06
 
 ### Added.
