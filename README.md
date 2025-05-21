@@ -86,20 +86,58 @@ kubectl xdsnap capture --namespace <namespace> --pod <pod-name> --container <con
 - `--pod` : Name of the target pod (optional; if omitted, captures all Consul-injected pods).
 - `--container` : Name of the application container.
   Do **not** specify the `consul-dataplane` container—this will cause the tool to exit automatically, as exec'ing into the dataplane is not supported.
-- `--interval` : Interval between data captures (in seconds, default: 30).
+- `--sleep` : Interval between data captures (in seconds, default: 5).
 - `--duration` : Duration to run the capture process (in seconds, default: 60).
+- `--repeat` : Number of times to take a snapshot.
+- `--enable-trace`: Temporarily set Envoy log level to trace during capture (auto-reverts to info afterward).
+- `--tcpdump`: Enables tcpdump capture using a privileged ephemeral debug pod (only supports single-run capture).
 - `--output-dir` : Directory to save the snapshots (default: current directory).
 - `--endpoints` : Specific Envoy admin endpoints to capture (default: `["/stats", "/config_dump", "/listeners", "/clusters", "/certs"]`).
 
 ### Example
 
-The following example captures data from the `static-client` container within the `static-client-685c8c98dd-r9wc5` pod in the `consul` namespace, every 30 seconds for a duration of 60 seconds:
+The following example captures data from the `static-client` container within the `static-client-685c8c98dd-r9wc5` pod in the `consul` namespace, for a duration of 60 seconds:
 
 ```bash
-kubectl xdsnap capture --namespace consul --pod static-client-685c8c98dd-r9wc5 --container static-client --interval 30 --duration 60
+kubectl xdsnap capture --namespace consul --pod static-client-685c8c98dd-r9wc5 --container static-client  --duration 60
+```
+#### Enable verbose Envoy logs (trace) during capture
+
+```bash
+kubectl xdsnap capture --namespace consul --pod static-client-685c8c98dd-r9wc5 --container static-client  --duration 120 --enable-trace
 ```
 
+#### Run exactly 3 snapshots
 
+```bash
+kubectl xdsnap capture --namespace consul --pod static-client-685c8c98dd-r9wc5 --container static-client  --repeat 3
+```
+
+#### Capture network traffic with tcpdump
+
+```bash
+kubectl xdsnap capture --namespace consul --pod dashboard-8bd546b69-m6v4q --container dashboard --tcpdump
+```
+
+#### Run trace logging and tcpdump together
+
+```bash
+kubectl xdsnap capture --namespace consul --pod dashboard-8bd546b69-m6v4q --container dashboard --enable-trace --tcpdump
+```
+
+#### Invalid: Targeting `consul-dataplane` as the container
+
+```bash
+kubectl xdsnap capture --namespace consul --pod dashboard-8bd546b69-m8knh --container consul-dataplane 
+```
+
+> ❌ **This will fail with the following error:**
+>
+> ```
+> Error: 'consul-dataplane' cannot be used as the --container value. Please specify the application container instead
+> ```
+>
+> You should specify the **application container**, such as `dashboard`, and `xDSnap` will automatically locate and interact with the sidecar (`consul-dataplane`) as needed.
 ### Configuration
 
 #### Environment Variables
@@ -107,6 +145,10 @@ kubectl xdsnap capture --namespace consul --pod static-client-685c8c98dd-r9wc5 -
 
 #### Notes
 - The tool attempts to use in-cluster configuration. If unsuccessful, it falls back to using `KUBECONFIG`.
+- When `--tcpdump` is enabled, a temporary debug pod is created in the same network namespace to capture packet data. The resulting `.pcap` file is included in the final snapshot.
+- `--repeat` controls the number of capture cycles. If set, it runs that many times. `--duration` can still be used alongside it to enforce a graceful timeout for the entire session.
+- The tool automatically detects sidecar containers and selects the appropriate method (`wget` or a debug pod) to set the Envoy log level.
+- You can use the application container for endpoint capture even if the dataplane sidecar is used to toggle log levels.
 
 ## 💡 Feature Requests
 
