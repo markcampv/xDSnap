@@ -1,18 +1,14 @@
+//go:build analyze
+// +build analyze
+
 package cmd
 
 import (
-	"archive/tar"
-	"compress/gzip"
-	"context"
 	"errors"
 	"fmt"
-	"io"
+	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"
-	"strings"
-
-	"github.com/sashabaranov/go-openai"
-	"github.com/spf13/cobra"
 )
 
 var analyzeCmd = &cobra.Command{
