@@ -5,8 +5,8 @@ go 1.23.2
 toolchain go1.24.4
 
 require (
-	github.com/spf13/cobra v1.8.1
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/cobra v1.10.1
+	github.com/spf13/pflag v1.0.9
 	github.com/spf13/viper v1.15.0
 	k8s.io/api v0.30.0-alpha.3
 	k8s.io/apimachinery v0.30.0-alpha.3
