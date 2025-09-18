@@ -16,7 +16,7 @@ func NewRootCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	// Add the capture subcommand
 	rootCmd.AddCommand(NewCaptureCommand(streams))
 	// Add the analyze subcommand
-	rootCmd.AddCommand(NewAnalyzeCommand(streams))
+	//rootCmd.AddCommand(NewAnalyzeCommand(streams))
 
 	return rootCmd
 }
