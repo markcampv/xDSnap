@@ -9,7 +9,7 @@ jobs:
   krew:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
 
       - uses: rajatjindal/krew-release-bot@v0.0.44
         with:
