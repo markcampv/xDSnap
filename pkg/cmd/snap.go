@@ -5,11 +5,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/markcampv/xDSnap/kube"
@@ -42,6 +45,7 @@ func CaptureSnapshot(kubeService kube.KubernetesApiService, config SnapshotConfi
 	}
 	defer os.RemoveAll(tempDir)
 
+	// Stream logs from app container + any extras (e.g., envoy-sidecar / consul-dataplane)
 	logResults := make(chan struct{}, len(config.ExtraLogs)+1)
 	for _, c := range append([]string{config.ContainerName}, config.ExtraLogs...) {
 		if c == "" {
@@ -64,89 +68,64 @@ func CaptureSnapshot(kubeService kube.KubernetesApiService, config SnapshotConfi
 		}()
 	}
 
+	// --- Set Envoy log level via EPHEMERAL container (no docker.sock) ---
 	logLevel := "debug"
 	if config.EnableTrace {
 		logLevel = "trace"
 	}
-	log.Printf("Creating privileged debug pod to set log level '%s'", logLevel)
-
-	curlURL := fmt.Sprintf("http://localhost:19000/logging?level=%s", logLevel)
-	ephName, err := kubeService.CreatePrivilegedDebugPod(config.PodName, config.ContainerName, []string{
-		"curl", "-s", "-X", "POST", curlURL,
-	})
-	if err != nil {
-		log.Printf("Failed to create debug pod: %v", err)
-	} else {
-		err = kubeService.WaitForPodRunning(ephName, 30*time.Second)
-		if err != nil {
-			log.Printf("Timeout waiting for debug pod: %v", err)
-		} else {
-			var curlOut bytes.Buffer
-			_, err := kubeService.ExecuteCommand(ephName, "debug", []string{
-				"nsenter", "--target", "1", "--net", "--", "curl", "-s", "-X", "POST", curlURL,
-			}, &curlOut)
-			if err != nil {
-				log.Printf("Failed to execute curl: %v", err)
-			} else {
-				log.Printf("curl output: %s", curlOut.String())
-			}
-		}
-		_ = kubeService.DeletePod(ephName)
+	log.Printf("Setting Envoy log level to '%s' via ephemeral container", logLevel)
+	curlURL := fmt.Sprintf("http://127.0.0.1:19000/logging?level=%s", logLevel)
+	if err := kubeService.RunEphemeralInTargetNetNS(
+		config.PodName,
+		config.ContainerName, // any container in the pod shares the netns
+		[]string{"sh", "-c", "curl -s -X POST " + curlURL}, // simple POST to admin /logging
+		false,
+		30*time.Second,
+	); err != nil {
+		log.Printf("Failed to set log level: %v", err)
 	}
 
-	var tcpdumpPodName string
+	// --- Optional tcpdump capture (runtime-agnostic; streams base64 via logs) ---
 	if config.TcpdumpEnabled {
-		log.Printf("Launching tcpdump capture pod...")
-		tcpdumpPodName, err = kubeService.CreateConcurrentTcpdumpCapturePod(config.PodName, []string{
-			config.ContainerName, "envoy-sidecar", "consul-dataplane",
-		}, config.Duration)
+		log.Printf("Starting tcpdump via ephemeral container (streaming to logs)...")
+		ephemName, err := kubeService.CreateConcurrentTcpdumpCapturePod(
+			config.PodName,
+			[]string{config.ContainerName, "envoy-sidecar", "consul-dataplane"},
+			config.Duration,
+		)
 		if err != nil {
-			log.Printf("Failed to launch tcpdump capture pod: %v", err)
+			log.Printf("Failed to start tcpdump: %v", err)
 		} else {
-			log.Printf("Waiting for tcpdump pod to complete...")
-			time.Sleep(config.Duration + 5*time.Second)
-
-			log.Printf("Fetching .pcap files from tcpdump pod: %s", tcpdumpPodName)
-			var tarOut bytes.Buffer
-			var tarErr bytes.Buffer
-			_, err := kubeService.ExecuteCommandWithStderr(tcpdumpPodName, "tcpdump", []string{
-				"tar", "-cf", "-", "-C", "/captures", ".",
-			}, &tarOut, &tarErr)
-			if err != nil {
-				log.Printf("Failed to fetch .pcap files: %v", err)
-				log.Printf("Stderr: %s", tarErr.String())
+			// The ephemeral container completed; fetch its (base64) logs and decode to a .pcap
+			var logsBuf bytes.Buffer
+			if err := kubeService.FetchContainerLogs(context.Background(), config.PodName, ephemName, false, &logsBuf); err != nil {
+				log.Printf("Failed to fetch tcpdump logs for %s: %v", ephemName, err)
+			} else if logsBuf.Len() == 0 {
+				log.Printf("No tcpdump data found in logs for %s", ephemName)
 			} else {
-				tarReader := tar.NewReader(&tarOut)
-				for {
-					hdr, err := tarReader.Next()
-					if err == io.EOF {
-						break
+				// Sanitize and decode base64 safely
+				raw := logsBuf.String()
+				clean := regexp.MustCompile(`[^A-Za-z0-9+/=]`).ReplaceAllString(strings.TrimSpace(raw), "")
+				if clean == "" {
+					log.Printf("No base64 tcpdump data after sanitization")
+				} else {
+					data, decErr := base64.StdEncoding.DecodeString(clean)
+					if decErr != nil {
+						log.Printf("Failed to decode base64 tcpdump stream (raw=%dB, clean=%dB): %v", len(raw), len(clean), decErr)
+					} else {
+						pcapPath := filepath.Join(tempDir, "xdsnap.pcap")
+						if werr := os.WriteFile(pcapPath, data, 0644); werr != nil {
+							log.Printf("Failed to write pcap file: %v", werr)
+						} else {
+							log.Printf("Saved .pcap file: %s", pcapPath)
+						}
 					}
-					if err != nil {
-						log.Printf("Error reading tar stream: %v", err)
-						break
-					}
-					if hdr.FileInfo().IsDir() {
-						continue
-					}
-					targetFile := filepath.Join(tempDir, hdr.Name)
-					f, err := os.Create(targetFile)
-					if err != nil {
-						log.Printf("Failed to create file for pcap: %v", err)
-						continue
-					}
-					_, err = io.Copy(f, tarReader)
-					f.Close()
-					if err != nil {
-						log.Printf("Failed to write pcap file: %v", err)
-					}
-					log.Printf("Saved .pcap file: %s", targetFile)
 				}
 			}
-			_ = kubeService.DeletePod(tcpdumpPodName)
 		}
 	}
 
+	// --- Envoy admin endpoints via PORT-FORWARD (with exec fallback inside fetchEnvoyEndpoint) ---
 	for _, endpoint := range config.Endpoints {
 		data, err := fetchEnvoyEndpoint(kubeService, config.PodName, config.ContainerName, endpoint)
 		if err != nil {
@@ -157,50 +136,38 @@ func CaptureSnapshot(kubeService kube.KubernetesApiService, config SnapshotConfi
 			log.Printf("Warning: No data received from endpoint %s for pod %s", endpoint, config.PodName)
 			continue
 		}
-		filePath := filepath.Join(tempDir, fmt.Sprintf("%s.json", endpoint[1:]))
+		filePath := filepath.Join(tempDir, fmt.Sprintf("%s.json", strings.TrimPrefix(endpoint, "/")))
 		if err := os.WriteFile(filePath, data, 0644); err != nil {
-			log.Printf("Failed to write data for %s: %v", endpoint, err)
+			log.Panicf("Failed to write data for %s: %v", endpoint, err)
 		} else {
 			fmt.Printf("Captured %s for %s and saved to %s\n", endpoint, config.PodName, filePath)
 		}
 	}
 
+	// Wait for all log streams to finish flushing
 	for i := 0; i < cap(logResults); i++ {
 		<-logResults
 	}
 
+	// Bundle snapshot
 	tarFilePath := filepath.Join(config.OutputDir, fmt.Sprintf("%s_snapshot.tar.gz", config.PodName))
 	if err := createTarGz(tarFilePath, tempDir); err != nil {
 		return fmt.Errorf("failed to create tar.gz file: %w", err)
 	}
-
 	fmt.Printf("Snapshot for %s saved as %s\n", config.PodName, tarFilePath)
 
+	// Reset log level via EPHEMERAL container
 	if !config.SkipLogLevelReset {
-		resetURL := "http://localhost:19000/logging?level=info"
-		log.Printf("Resetting log level back to 'info' on pod: %s", config.PodName)
-
-		resetPodName, err := kubeService.CreatePrivilegedDebugPod(config.PodName, config.ContainerName, []string{
-			"curl", "-s", "-X", "POST", resetURL,
-		})
-		if err != nil {
-			log.Printf("Failed to create pod to reset log level: %v", err)
-		} else {
-			err = kubeService.WaitForPodRunning(resetPodName, 30*time.Second)
-			if err != nil {
-				log.Printf("Timeout waiting for reset pod: %v", err)
-			} else {
-				var resetOut bytes.Buffer
-				_, err := kubeService.ExecuteCommand(resetPodName, "debug", []string{
-					"nsenter", "--target", "1", "--net", "--", "curl", "-s", "-X", "POST", resetURL,
-				}, &resetOut)
-				if err != nil {
-					log.Printf("Failed to reset log level to info: %v", err)
-				} else {
-					log.Printf("Log level reset response: %s", resetOut.String())
-				}
-			}
-			_ = kubeService.DeletePod(resetPodName)
+		resetURL := "http://127.0.0.1:19000/logging?level=info"
+		log.Printf("Resetting Envoy log level back to 'info' on pod: %s", config.PodName)
+		if err := kubeService.RunEphemeralInTargetNetNS(
+			config.PodName,
+			config.ContainerName,
+			[]string{"sh", "-c", "curl -s -X POST " + resetURL},
+			false,
+			30*time.Second,
+		); err != nil {
+			log.Printf("Failed to reset log level to info: %v", err)
 		}
 	}
 
@@ -225,23 +192,41 @@ func streamLogsWithTimeout(kubeService kube.KubernetesApiService, pod, container
 }
 
 func fetchEnvoyEndpoint(kubeService kube.KubernetesApiService, pod, container, endpoint string) ([]byte, error) {
-	command := []string{"wget", "-qO-", fmt.Sprintf("http://localhost:19000%s", endpoint)}
-	var outputBuffer bytes.Buffer
-
+	const podPort = 19000
 	const maxRetries = 5
-	const retryDelay = 3 * time.Second
+	const retryDelay = 2 * time.Second
 
+	// --- First attempt: port-forward ---
 	for i := 0; i < maxRetries; i++ {
-		outputBuffer.Reset()
-		log.Printf("Fetching data from %s on pod %s, attempt %d", endpoint, pod, i+1)
-		_, err := kubeService.ExecuteCommand(pod, container, command, &outputBuffer)
-		if err == nil && outputBuffer.Len() > 0 {
-			return outputBuffer.Bytes(), nil
+		b, err := kubeService.PortForwardGET(pod, podPort, endpoint)
+		if err == nil && len(b) > 0 {
+			return b, nil
 		}
 		time.Sleep(retryDelay)
 	}
 
-	return nil, fmt.Errorf("failed to fetch data from endpoint %s after %d retries", endpoint, maxRetries)
+	// --- Fallback: ephemeral curl inside pod netns ---
+	var buf bytes.Buffer
+	curlCmd := []string{
+		"sh", "-c",
+		fmt.Sprintf("curl -s http://127.0.0.1:%d%s", podPort, endpoint),
+	}
+
+	err := kubeService.RunEphemeralInTargetNetNSWithOutput(
+		pod,
+		container, // any container in the pod (shares netns)
+		curlCmd,
+		false,          // not privileged
+		15*time.Second, // timeout
+		&buf,           // capture stdout
+		nil,            // ignore stderr
+	)
+	if err == nil && buf.Len() > 0 {
+		log.Printf("Fetched %s from pod %s via ephemeral curl", endpoint, pod)
+		return buf.Bytes(), nil
+	}
+
+	return nil, fmt.Errorf("port-forward and ephemeral curl both failed for %s", endpoint)
 }
 
 func createTarGz(outputFile string, sourceDir string) error {

@@ -124,7 +124,7 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
 
 					sidecar := ""
 					for _, c := range containers {
-						if c == "consul-dataplane" || c == "envoy-sidecar" {
+						if c == "consul-dataplane" || c == "envoy-sidecar" || c == "mesh-gateway" || c == "api-gateway" {
 							sidecar = c
 							break
 						}
@@ -140,8 +140,14 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
 						pod, containerName, enableTrace, tcpdumpEnabled, sidecar, finalReset)
 
 					snapshotConfig := SnapshotConfig{
-						PodName:           pod,
-						ContainerName:     containerName,
+						PodName: pod,
+						// Use CLI flag if provided, otherwise use detected sidecar
+						ContainerName: func() string {
+							if containerName != "" {
+								return containerName
+							}
+							return sidecar
+						}(),
 						Endpoints:         endpoints,
 						OutputDir:         snapshotDir,
 						ExtraLogs:         []string{sidecar},
@@ -150,7 +156,6 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
 						Duration:          time.Duration(duration) * time.Second,
 						SkipLogLevelReset: !finalReset,
 					}
-
 					// Start timer here *after* setup begins
 					if repeat == 0 && duration > 0 && startTime.IsZero() {
 						startTime = time.Now()
