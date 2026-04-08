@@ -1,8 +1,8 @@
 module github.com/markcampv/xDSnap
 
-go 1.23.2
+go 1.24
 
-toolchain go1.24.4
+toolchain go1.25.8
 
 require (
 	github.com/spf13/cobra v1.8.1
