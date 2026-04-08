@@ -678,3 +678,5 @@ func (k *KubernetesApiServiceImpl) GetPodJSON(podName string) ([]byte, error) {
 func newHostPathType(t corev1.HostPathType) *corev1.HostPathType {
 	return &t
 }
+
+// trigger CI after Go toolchain update
