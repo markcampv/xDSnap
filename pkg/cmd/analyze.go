@@ -35,6 +35,22 @@ type AnalyzeBundle struct {
 	Files      map[string]string `json:"-"`
 	Logs       map[string]string `json:"-"`
 	JSONDocs   map[string]any    `json:"-"`
+
+	Pod *PodMetadata `json:"-"`
+}
+
+type PodMetadata struct {
+	Metadata struct {
+		Name      string            `json:"name"`
+		Namespace string            `json:"namespace"`
+		Labels    map[string]string `json:"labels"`
+	} `json:"metadata"`
+	Spec struct {
+		NodeName   string `json:"nodeName"`
+		Containers []struct {
+			Name string `json:"name"`
+		} `json:"containers"`
+	} `json:"spec"`
 }
 
 type Severity string
@@ -71,13 +87,14 @@ type ReportSummary struct {
 }
 
 type AnalyzeReport struct {
-	Version       string        `json:"version"`
-	GeneratedAt   time.Time     `json:"generated_at"`
-	BundlePath    string        `json:"bundle_path"`
-	PodName       string        `json:"pod_name,omitempty"`
-	GraphIncluded bool          `json:"graph_included"`
-	Summary       ReportSummary `json:"summary"`
-	Findings      []Finding     `json:"findings"`
+	Version          string        `json:"version"`
+	GeneratedAt      time.Time     `json:"generated_at"`
+	BundlePath       string        `json:"bundle_path"`
+	PodName          string        `json:"pod_name,omitempty"`
+	GraphIncluded    bool          `json:"graph_included"`
+	Summary          ReportSummary `json:"summary"`
+	NarrativeSummary []string      `json:"narrative_summary,omitempty"`
+	Findings         []Finding     `json:"findings"`
 }
 
 type Graph struct {
@@ -142,7 +159,6 @@ func NewAnalyzeCommand(_ genericclioptions.IOStreams) *cobra.Command {
 				if apiKey == "" {
 					return errors.New("AI analysis requested but OPENAI_API_KEY is not set")
 				}
-				// Reserved for future AI summarization over deterministic findings.
 			}
 
 			return runAnalyze(*opts)
@@ -316,6 +332,13 @@ func loadAnalyzeBundle(bundlePath, root string) (*AnalyzeBundle, error) {
 			}
 		}
 
+		if rel == "pod.json" {
+			var pod PodMetadata
+			if err := json.Unmarshal(data, &pod); err == nil {
+				b.Pod = &pod
+			}
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -343,6 +366,8 @@ func runRules(bundle *AnalyzeBundle) []Finding {
 		CertExpiryWarningRule{},
 		MissingExpectedArtifactRule{},
 		ClusterSemanticRule{},
+		HealthyClusterBaselineRule{},
+		RouteReferencesMissingClusterRule{},
 	}
 
 	var findings []Finding
@@ -597,7 +622,6 @@ func (r ClusterSemanticRule) Evaluate(b *AnalyzeBundle) []Finding {
 	for _, clusterName := range sortedClusterNames(clusters) {
 		cluster := clusters[clusterName]
 
-		// Case 1: cluster has only unhealthy endpoints
 		if len(cluster.Endpoints) > 0 {
 			total := 0
 			unhealthy := 0
@@ -701,7 +725,6 @@ func (r ClusterSemanticRule) Evaluate(b *AnalyzeBundle) []Finding {
 				})
 			}
 
-			// Only warn on idle clusters when they are not obvious self/admin/local support clusters.
 			if total > 0 && noTraffic == total && isPotentiallyImportantCluster(cluster.Name) {
 				findings = append(findings, Finding{
 					ID:         r.ID() + "." + sanitizeID(cluster.Name) + ".idle",
@@ -726,7 +749,6 @@ func (r ClusterSemanticRule) Evaluate(b *AnalyzeBundle) []Finding {
 			}
 		}
 
-		// Do not flag added_via_api=false alone. Only surface it as informational context if cluster is also suspicious.
 		if cluster.AddedViaAPI != nil && !*cluster.AddedViaAPI && isPotentiallyImportantCluster(cluster.Name) {
 			suspicious := clusterHasSuspiciousState(cluster)
 			if suspicious {
@@ -752,6 +774,117 @@ func (r ClusterSemanticRule) Evaluate(b *AnalyzeBundle) []Finding {
 				})
 			}
 		}
+	}
+
+	return findings
+}
+
+type HealthyClusterBaselineRule struct{}
+
+func (r HealthyClusterBaselineRule) ID() string { return "envoy.cluster.healthy_baseline" }
+func (r HealthyClusterBaselineRule) Evaluate(b *AnalyzeBundle) []Finding {
+	content, ok := b.Files["clusters.json"]
+	if !ok {
+		return nil
+	}
+
+	clusters := parseClustersText(content)
+	if len(clusters) == 0 {
+		return nil
+	}
+
+	allHealthy := true
+	interesting := 0
+
+	for _, cluster := range clusters {
+		if !isPotentiallyImportantCluster(cluster.Name) {
+			continue
+		}
+		interesting++
+
+		for _, host := range cluster.Endpoints {
+			if host.HealthFlags != "" && strings.ToLower(host.HealthFlags) != "healthy" {
+				allHealthy = false
+			}
+			if parseIntStat(host.Stats["cx_connect_fail"]) > 0 ||
+				parseIntStat(host.Stats["rq_error"]) > 0 ||
+				parseIntStat(host.Stats["rq_timeout"]) > 0 {
+				allHealthy = false
+			}
+		}
+	}
+
+	if interesting == 0 || !allHealthy {
+		return nil
+	}
+
+	return []Finding{
+		{
+			ID:         r.ID(),
+			Title:      "Parsed Envoy clusters appear healthy",
+			Severity:   SeverityInfo,
+			Confidence: 0.80,
+			Summary:    "The parsed non-support clusters do not currently show unhealthy endpoints, connection failures, or request failures.",
+			Hypothesis: "The dataplane appears healthy within the scope and timing of this capture.",
+			Evidence: []Evidence{
+				{
+					File:    "clusters.json",
+					Snippet: fmt.Sprintf("healthy_clusters=%d", interesting),
+				},
+			},
+			RecommendedActions: []string{
+				"If an issue is intermittent, compare this snapshot with one captured during the failure window.",
+			},
+			Tags: []string{"envoy", "clusters", "baseline"},
+		},
+	}
+}
+
+type RouteReferencesMissingClusterRule struct{}
+
+func (r RouteReferencesMissingClusterRule) ID() string { return "envoy.route.missing_cluster" }
+func (r RouteReferencesMissingClusterRule) Evaluate(b *AnalyzeBundle) []Finding {
+	cfg, ok := b.JSONDocs["config_dump.json"]
+	if !ok {
+		return nil
+	}
+
+	clusterText, ok := b.Files["clusters.json"]
+	if !ok {
+		return nil
+	}
+
+	parsed := parseClustersText(clusterText)
+	existing := map[string]struct{}{}
+	for name := range parsed {
+		existing[name] = struct{}{}
+	}
+
+	refs := findReferencedClustersInConfigDump(cfg)
+	var findings []Finding
+
+	for _, ref := range refs {
+		if _, ok := existing[ref]; ok {
+			continue
+		}
+
+		findings = append(findings, Finding{
+			ID:         r.ID() + "." + sanitizeID(ref),
+			Title:      fmt.Sprintf("Route references missing cluster %s", ref),
+			Severity:   SeverityCritical,
+			Confidence: 0.95,
+			Summary:    "A cluster name referenced in config_dump.json was not found in clusters.json.",
+			Hypothesis: "This can indicate route-to-cluster mismatch, stale xDS state, or discovery-chain naming drift.",
+			Evidence: []Evidence{
+				{File: "config_dump.json", Pointer: "cluster=" + ref},
+				{File: "clusters.json", Snippet: "cluster not found in parsed cluster inventory"},
+			},
+			RecommendedActions: []string{
+				"Compare route cluster names against generated discovery-chain clusters.",
+				"Inspect ServiceRouter, ServiceResolver, and HTTPRoute configuration.",
+			},
+			Tags: []string{"envoy", "routes", "clusters"},
+		})
 	}
 
 	return findings
@@ -841,7 +974,6 @@ func parseClustersText(content string) map[string]*ParsedCluster {
 			clusters[clusterName] = cluster
 		}
 
-		// cluster::observability_name::foo
 		if len(parts) == 3 {
 			key := parts[1]
 			val := parts[2]
@@ -861,7 +993,6 @@ func parseClustersText(content string) map[string]*ParsedCluster {
 			continue
 		}
 
-		// cluster::default_priority::max_connections::1024
 		if len(parts) == 4 && (parts[1] == "default_priority" || parts[1] == "high_priority") {
 			priorityName := parts[1]
 			key := parts[2]
@@ -875,7 +1006,6 @@ func parseClustersText(content string) map[string]*ParsedCluster {
 			continue
 		}
 
-		// cluster::127.0.0.1:20100::cx_active::0
 		if len(parts) == 4 {
 			addr := parts[1]
 			key := parts[2]
@@ -1031,6 +1161,37 @@ func min(a, b int) int {
 	return b
 }
 
+func findReferencedClustersInConfigDump(doc any) []string {
+	var refs []string
+	seen := map[string]struct{}{}
+
+	var walk func(v any)
+	walk = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			for k, val := range x {
+				if k == "cluster" {
+					if s, ok := val.(string); ok && s != "" {
+						if _, exists := seen[s]; !exists {
+							seen[s] = struct{}{}
+							refs = append(refs, s)
+						}
+					}
+				}
+				walk(val)
+			}
+		case []any:
+			for _, item := range x {
+				walk(item)
+			}
+		}
+	}
+
+	walk(doc)
+	sort.Strings(refs)
+	return refs
+}
+
 func buildGraph(b *AnalyzeBundle) *Graph {
 	g := &Graph{
 		Nodes: []GraphNode{},
@@ -1055,12 +1216,52 @@ func buildGraph(b *AnalyzeBundle) *Graph {
 
 	if b.PodName != "" {
 		podID := "pod:" + b.PodName
-		addNode(GraphNode{
+
+		podNode := GraphNode{
 			ID:   podID,
 			Kind: "pod",
 			Name: b.PodName,
-		})
+		}
+
+		if b.Pod != nil {
+			podNode.Metadata = map[string]string{
+				"namespace": b.Pod.Metadata.Namespace,
+				"node":      b.Pod.Spec.NodeName,
+			}
+		}
+
+		addNode(podNode)
 		g.Edges = append(g.Edges, GraphEdge{From: bundleID, To: podID, Kind: "captures"})
+
+		if b.Pod != nil {
+			for k, v := range b.Pod.Metadata.Labels {
+				labelID := fmt.Sprintf("label:%s=%s", k, v)
+				addNode(GraphNode{
+					ID:   labelID,
+					Kind: "k8s_label",
+					Name: fmt.Sprintf("%s=%s", k, v),
+				})
+				g.Edges = append(g.Edges, GraphEdge{
+					From: podID,
+					To:   labelID,
+					Kind: "has_label",
+				})
+			}
+
+			for _, c := range b.Pod.Spec.Containers {
+				containerID := "container:" + c.Name
+				addNode(GraphNode{
+					ID:   containerID,
+					Kind: "container",
+					Name: c.Name,
+				})
+				g.Edges = append(g.Edges, GraphEdge{
+					From: podID,
+					To:   containerID,
+					Kind: "runs",
+				})
+			}
+		}
 	}
 
 	for file := range b.Files {
@@ -1104,7 +1305,6 @@ func buildGraph(b *AnalyzeBundle) *Graph {
 		}
 	}
 
-	// Enrich graph with parsed clusters if available
 	if content, ok := b.Files["clusters.json"]; ok {
 		clusters := parseClustersText(content)
 		for _, clusterName := range sortedClusterNames(clusters) {
@@ -1141,6 +1341,61 @@ func buildGraph(b *AnalyzeBundle) *Graph {
 	return g
 }
 
+func buildNarrativeSummary(bundle *AnalyzeBundle, findings []Finding) []string {
+	lines := []string{}
+
+	clusterCount := 0
+	endpointCount := 0
+	if content, ok := bundle.Files["clusters.json"]; ok {
+		clusters := parseClustersText(content)
+		clusterCount = len(clusters)
+		for _, c := range clusters {
+			endpointCount += len(c.Endpoints)
+		}
+	}
+
+	if bundle.Pod != nil {
+		lines = append(lines,
+			fmt.Sprintf("Pod `%s` was captured in namespace `%s` on node `%s`.",
+				valueOr(bundle.Pod.Metadata.Name, bundle.PodName),
+				valueOr(bundle.Pod.Metadata.Namespace, "unknown"),
+				valueOr(bundle.Pod.Spec.NodeName, "unknown"),
+			),
+		)
+	}
+
+	if clusterCount > 0 {
+		lines = append(lines,
+			fmt.Sprintf("The snapshot includes `%d` parsed Envoy clusters and `%d` parsed endpoints.",
+				clusterCount, endpointCount,
+			),
+		)
+	}
+
+	if len(findings) == 0 {
+		lines = append(lines, "No findings were triggered by the current offline ruleset.")
+	} else {
+		crit, warn, info := 0, 0, 0
+		for _, f := range findings {
+			switch f.Severity {
+			case SeverityCritical:
+				crit++
+			case SeverityWarn:
+				warn++
+			default:
+				info++
+			}
+		}
+		lines = append(lines,
+			fmt.Sprintf("The analyzer produced `%d` critical, `%d` warning, and `%d` informational findings.",
+				crit, warn, info,
+			),
+		)
+	}
+
+	return lines
+}
+
 func buildReport(bundle *AnalyzeBundle, findings []Finding, graph *Graph) *AnalyzeReport {
 	summary := ReportSummary{}
 	for _, f := range findings {
@@ -1156,13 +1411,14 @@ func buildReport(bundle *AnalyzeBundle, findings []Finding, graph *Graph) *Analy
 	}
 
 	return &AnalyzeReport{
-		Version:       "v1alpha1",
-		GeneratedAt:   time.Now().UTC(),
-		BundlePath:    bundle.BundlePath,
-		PodName:       bundle.PodName,
-		GraphIncluded: graph != nil,
-		Summary:       summary,
-		Findings:      findings,
+		Version:          "v1alpha1",
+		GeneratedAt:      time.Now().UTC(),
+		BundlePath:       bundle.BundlePath,
+		PodName:          bundle.PodName,
+		GraphIncluded:    graph != nil,
+		Summary:          summary,
+		NarrativeSummary: buildNarrativeSummary(bundle, findings),
+		Findings:         findings,
 	}
 }
 
@@ -1179,6 +1435,14 @@ func renderMarkdown(report *AnalyzeReport) string {
 	fmt.Fprintf(&b, "- Critical: %d\n", report.Summary.CriticalFindings)
 	fmt.Fprintf(&b, "- Warnings: %d\n", report.Summary.WarningFindings)
 	fmt.Fprintf(&b, "- Info: %d\n\n", report.Summary.InfoFindings)
+
+	if len(report.NarrativeSummary) > 0 {
+		fmt.Fprintf(&b, "## Summary\n\n")
+		for _, line := range report.NarrativeSummary {
+			fmt.Fprintf(&b, "- %s\n", line)
+		}
+		fmt.Fprintf(&b, "\n")
+	}
 
 	critical := filterSeverity(report.Findings, SeverityCritical)
 	warnings := filterSeverity(report.Findings, SeverityWarn)

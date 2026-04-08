@@ -3,6 +3,7 @@ package kube
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	corev1 "k8s.io/api/core/v1"
@@ -40,6 +41,8 @@ type KubernetesApiService interface {
 	RunEphemeralInTargetNetNSWithOutput(targetPod, targetContainer string, command []string, privileged bool, timeout time.Duration, stdout, stderr io.Writer) error
 	StartEphemeralTcpdump(targetPod, targetContainer string, duration time.Duration, outPath string) error
 	StartEphemeralTcpdumpToLogs(targetPod, targetContainer string, duration time.Duration) (string, error)
+	PickSidecarContainer(podName string, containers []string) (string, error)
+	GetPodJSON(podName string) ([]byte, error)
 }
 
 type KubernetesApiServiceImpl struct {
@@ -574,27 +577,19 @@ func (k *KubernetesApiServiceImpl) CreatePrivilegedDebugPod(targetPod string, co
 	return "ephemeral-" + targetPod, nil
 }
 
-func (k *KubernetesApiServiceImpl) CreateConcurrentTcpdumpCapturePod(targetPod string, containers []string, duration time.Duration) (string, error) {
-	// pick likely dataplane/envoy/gateway target; fall back to first
-	candidates := []string{"consul-dataplane", "envoy-sidecar", "mesh-gateway", "api-gateway"}
+func (k *KubernetesApiServiceImpl) CreateConcurrentTcpdumpCapturePod(
+	targetPod string, containers []string, duration time.Duration,
+) (string, error) {
 
-	var targetContainer string
-	for _, c := range candidates {
-		if ok, _ := k.ContainerExists(targetPod, c); ok {
-			targetContainer = c
-			break
-		}
+	// Auto-detect the correct dataplane / gateway container (supports *-tls, *-dc1, etc.)
+	targetContainer, err := k.PickSidecarContainer(targetPod, containers)
+	if err != nil {
+		return "", err
 	}
 
-	if targetContainer == "" {
-		if len(containers) > 0 {
-			targetContainer = containers[0]
-		} else {
-			return "", fmt.Errorf("no suitable containers found in pod %s", targetPod)
-		}
-	}
+	log.Printf("Detected sidecar container for pod %s: %s", targetPod, targetContainer)
 
-	// Launch ephemeral tcpdump that streams to logs; return the ephemeral container name
+	// Launch ephemeral tcpdump that streams to logs
 	ecName, err := k.StartEphemeralTcpdumpToLogs(targetPod, targetContainer, duration)
 	if err != nil {
 		return "", err
@@ -634,6 +629,50 @@ func (k *KubernetesApiServiceImpl) ExecuteCommandWithStderr(pod string, containe
 	}
 
 	return 0, nil
+}
+
+func (k *KubernetesApiServiceImpl) PickSidecarContainer(podName string, containers []string) (string, error) {
+	// 1️⃣ Check for Consul gateways first
+	for _, name := range containers {
+		if strings.HasPrefix(name, "api-gateway") ||
+			strings.HasPrefix(name, "mesh-gateway") ||
+			strings.HasPrefix(name, "ingress-gateway") ||
+			strings.HasPrefix(name, "terminating-gateway") {
+			log.Printf("Detected gateway container for pod %s: %s", podName, name)
+			return name, nil
+		}
+	}
+
+	// 2️⃣ Then check for workload dataplanes or sidecars
+	candidates := []string{"consul-dataplane", "envoy-sidecar"}
+	for _, c := range candidates {
+		if ok, _ := k.ContainerExists(podName, c); ok {
+			log.Printf("Detected dataplane container for pod %s: %s", podName, c)
+			return c, nil
+		}
+	}
+
+	// 3️⃣ Fallback: only one container = use it
+	if len(containers) == 1 {
+		log.Printf("Only one container found in pod %s, using: %s", podName, containers[0])
+		return containers[0], nil
+	}
+
+	// 4️⃣ Fallback: use first available
+	if len(containers) > 0 {
+		log.Printf("No known sidecar/gateway found in pod %s, defaulting to: %s", podName, containers[0])
+		return containers[0], nil
+	}
+
+	return "", fmt.Errorf("no suitable sidecar/gateway container found in pod %s", podName)
+}
+
+func (k *KubernetesApiServiceImpl) GetPodJSON(podName string) ([]byte, error) {
+	pod, err := k.clientset.CoreV1().Pods(k.namespace).Get(context.TODO(), podName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pod: %w", err)
+	}
+	return json.MarshalIndent(pod, "", "  ")
 }
 
 func newHostPathType(t corev1.HostPathType) *corev1.HostPathType {

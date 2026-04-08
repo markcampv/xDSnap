@@ -37,6 +37,7 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
 				log.Fatal("Error: 'consul-dataplane' cannot be used as the --container value. Please specify the application container instead.")
 			}
 
+			// Initialize Kubernetes client config
 			config, err := rest.InClusterConfig()
 			if err != nil {
 				log.Printf("Could not use in-cluster config, falling back to kubeconfig: %v", err)
@@ -61,6 +62,7 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
 
 			kubeService := kube.NewKubernetesApiService(clientset, config, namespace)
 
+			// Discover pods to capture
 			var podsToCapture []string
 			if podName == "" {
 				pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
@@ -80,6 +82,7 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
 				podsToCapture = append(podsToCapture, podName)
 			}
 
+			// Validation
 			if interval < 5 {
 				log.Fatalf("Interval must be at least 5 seconds")
 			}
@@ -95,13 +98,13 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
 			captures := 0
 			var startTime time.Time
 
+			// Capture loop
 			for {
 				if repeat > 0 && captures >= repeat {
 					log.Println("Repeat count reached, stopping capture")
 					break
 				}
 
-				// Delay setting the duration timer until after first snapshot begins
 				if repeat == 0 && duration > 0 && !startTime.IsZero() && time.Since(startTime) >= time.Duration(duration)*time.Second {
 					log.Println("Duration ended, stopping capture")
 					break
@@ -109,7 +112,6 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
 
 				timestamp := time.Now().Format("20060102_150405")
 				snapshotDir := fmt.Sprintf("%s/snapshot_%s", outputDir, timestamp)
-
 				if err := os.MkdirAll(snapshotDir, 0755); err != nil {
 					log.Printf("Failed to create snapshot directory: %v", err)
 					continue
@@ -122,15 +124,10 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
 						continue
 					}
 
-					sidecar := ""
-					for _, c := range containers {
-						if c == "consul-dataplane" || c == "envoy-sidecar" || c == "mesh-gateway" || c == "api-gateway" {
-							sidecar = c
-							break
-						}
-					}
-					if sidecar == "" {
-						log.Printf("No known Envoy sidecar found in pod %s", pod)
+					// Automatically detect sidecar / gateway container
+					sidecar, err := kubeService.PickSidecarContainer(pod, containers)
+					if err != nil {
+						log.Printf("%v", err)
 						continue
 					}
 
@@ -141,7 +138,6 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
 
 					snapshotConfig := SnapshotConfig{
 						PodName: pod,
-						// Use CLI flag if provided, otherwise use detected sidecar
 						ContainerName: func() string {
 							if containerName != "" {
 								return containerName
@@ -156,7 +152,7 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
 						Duration:          time.Duration(duration) * time.Second,
 						SkipLogLevelReset: !finalReset,
 					}
-					// Start timer here *after* setup begins
+
 					if repeat == 0 && duration > 0 && startTime.IsZero() {
 						startTime = time.Now()
 					}
@@ -178,9 +174,10 @@ func NewCaptureCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 
+	// CLI flags
 	captureCmd.Flags().StringVar(&podName, "pod", "", "Pod name (optional; defaults to all pods with connect-inject=true)")
-	captureCmd.Flags().StringVar(&containerName, "container", "", "Name of the application container")
-	captureCmd.Flags().StringSliceVar(&endpoints, "endpoints", []string{}, "Envoy endpoints to capture")
+	captureCmd.Flags().StringVar(&containerName, "container", "", "Name of the application container (optional)")
+	captureCmd.Flags().StringSliceVar(&endpoints, "endpoints", []string{}, "Envoy admin API endpoints to capture (e.g. /stats,/config_dump)")
 	captureCmd.Flags().StringVar(&outputDir, "output-dir", outputDir, "Directory to save snapshots")
 	captureCmd.Flags().StringVarP(&namespace, "namespace", "n", "", "Target namespace (optional)")
 	captureCmd.Flags().IntVar(&interval, "sleep", 5, "Sleep duration between captures in seconds (minimum 5s)")
